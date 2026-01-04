@@ -246,7 +246,9 @@ export default function Page() {
                     label={
                       !isMobile && pieDataDisplay.length <= 8
                         ? ({ name, percent }) =>
-                            `${name} ${(percent * 100).toFixed(0)}%`
+                            percent !== undefined
+                              ? `${name} ${(percent * 100).toFixed(0)}%`
+                              : name
                         : false
                     }
                     labelLine={false}
