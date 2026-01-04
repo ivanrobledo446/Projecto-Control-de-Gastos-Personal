@@ -17,8 +17,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Gasto Planner',
+  title: 'Control de Gastos',
   description: 'Control de gastos personal',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Control de Gastos',
+  },
+  icons: {
+    apple: '/apple-touch-icon.png',
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
