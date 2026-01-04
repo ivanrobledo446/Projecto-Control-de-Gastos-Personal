@@ -345,12 +345,11 @@ export default function HomePage() {
   const leadingActionsFor = useCallback(
     (t: Transaction) => (
       <LeadingActions>
-        <SwipeAction
-          onClick={() => openEditTransaction(t)}
-          className="relative !p-0 bg-white/10 border-r border-[var(--border)]"
-        >
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-[var(--text)]">
-            Editar
+        <SwipeAction onClick={() => openEditTransaction(t)}>
+          <div className="relative h-full w-full !p-0 bg-white/10 border-r border-[var(--border)]">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-[var(--text)]">
+              Editar
+            </div>
           </div>
         </SwipeAction>
       </LeadingActions>
@@ -364,10 +363,11 @@ export default function HomePage() {
         <SwipeAction
           onClick={() => confirmAndDeleteTransaction(t)}
           destructive={false}
-          className="relative !p-0 bg-white/10 border-l border-[var(--border)]"
         >
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-[var(--text)]">
-            Eliminar
+          <div className="relative h-full w-full !p-0 bg-white/10 border-l border-[var(--border)]">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-[var(--text)]">
+              Eliminar
+            </div>
           </div>
         </SwipeAction>
       </TrailingActions>
@@ -439,7 +439,9 @@ export default function HomePage() {
                     label={
                       !isMobile && pieDataDisplay.length <= 8
                         ? ({ name, percent }) =>
-                            `${name} ${(percent * 100).toFixed(0)}%`
+                            percent !== undefined
+                              ? `${name} ${(percent * 100).toFixed(0)}%`
+                              : name
                         : false
                     }
                     labelLine={false}
