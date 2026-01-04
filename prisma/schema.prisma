@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CategoryKind {
+  EXPENSE
+  INCOME
+}
+
+model Category {
+  id              String     @id @default(cuid())
+  name            String
+  parentId        String?
+  parent          Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children        Category[] @relation("CategoryTree")
+
+  kind            CategoryKind @default(EXPENSE)
+
+  bgColor         String?
+  childrenBgColor String?
+
+  transactions    Transaction[]
+  createdAt       DateTime   @default(now())
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  date       DateTime
+  amount     Decimal
+  note       String?
+
+  kind       CategoryKind @default(EXPENSE)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([kind])
+  @@index([kind, date])
+}

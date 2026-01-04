@@ -1,26 +1,50 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Evita scroll horizontal fantasma */
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Opción 4 — Dark minimal */
+:root {
+  --bg: #020617;
+  /* Fondo */
+  --card: #020617;
+  /* Cards (igual al fondo) */
+  --border: #1e293b;
+  /* Bordes */
+  --text: #e2e8f0;
+  /* Texto principal */
+  --muted: #94a3b8;
+  /* Texto secundario */
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body::before,
+body::after {
+  content: none !important;
+}
+
+/* Helpers reutilizables */
+@layer components {
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+
+  .text-muted {
+    color: var(--muted);
+  }
 }

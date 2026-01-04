@@ -9,9 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.1",
     "next": "16.1.1",
+    "prisma": "^6.19.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-swipeable-list": "^1.10.0",
+    "react-toastify": "^11.0.5",
+    "recharts": "^3.6.0",
+    "sweetalert2": "^11.26.17"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +27,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }
