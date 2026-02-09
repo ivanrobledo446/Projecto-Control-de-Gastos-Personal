@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 import {
   PieChart,
   Pie,
@@ -18,15 +19,22 @@ import { formatMoneyARS, parseMoney } from '@/lib/money';
 
 export default function Page() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const [month, setMonth] = useState(currentMonth);
+  const [year, setYear] = useState(currentYear);
+
+  const isCurrentPeriod = month === currentMonth && year === currentYear;
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [incomeTransactions, setIncomeTransactions] = useState<Transaction[]>(
-    []
+    [],
   );
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [isMobile, setIsMobile] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState(0);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)'); // tailwind "sm"
@@ -43,24 +51,33 @@ export default function Page() {
   }, [categories]);
 
   const loadTransactions = useCallback(async () => {
+    setLoading(true);
+
     try {
-      const [expenseRes, incomeRes] = await Promise.all([
+      const [expenseRes, incomeRes, openingRes] = await Promise.all([
         fetch(`/api/transactions?month=${month}&year=${year}&kind=EXPENSE`),
         fetch(`/api/transactions?month=${month}&year=${year}&kind=INCOME`),
+        fetch(`/api/monthly-opening-balance?month=${month}&year=${year}`),
       ]);
 
       if (!expenseRes.ok) throw new Error(await readApiError(expenseRes));
       if (!incomeRes.ok) throw new Error(await readApiError(incomeRes));
+      if (!openingRes.ok) throw new Error(await readApiError(openingRes));
 
       const expenseData = await expenseRes.json();
       const incomeData = await incomeRes.json();
+      const openingData = await openingRes.json();
 
       setTransactions(Array.isArray(expenseData) ? expenseData : []);
       setIncomeTransactions(Array.isArray(incomeData) ? incomeData : []);
+      setOpeningBalance(Number(openingData?.amount ?? 0));
     } catch (e: any) {
       toast.error(e?.message ?? 'No se pudieron cargar los datos.');
       setTransactions([]);
       setIncomeTransactions([]);
+      setOpeningBalance(0);
+    } finally {
+      setLoading(false);
     }
   }, [month, year]);
 
@@ -133,31 +150,99 @@ export default function Page() {
 
   const expenseTotal = useMemo(
     () => transactions.reduce((sum, t) => sum + parseMoney(t.amount), 0),
-    [transactions]
+    [transactions],
   );
 
   const incomeTotal = useMemo(
     () => incomeTransactions.reduce((sum, t) => sum + parseMoney(t.amount), 0),
-    [incomeTransactions]
+    [incomeTransactions],
+  );
+
+  const availableTotal = useMemo(
+    () => incomeTotal + openingBalance,
+    [incomeTotal, openingBalance],
   );
 
   const balance = useMemo(
-    () => incomeTotal - expenseTotal,
-    [incomeTotal, expenseTotal]
+    () => availableTotal - expenseTotal,
+    [availableTotal, expenseTotal],
   );
 
   const spentPct = useMemo(() => {
-    if (incomeTotal <= 0) return null;
-    return (expenseTotal / incomeTotal) * 100;
-  }, [incomeTotal, expenseTotal]);
+    if (availableTotal <= 0) return null;
+    return (expenseTotal / availableTotal) * 100;
+  }, [availableTotal, expenseTotal]);
 
   const monthName = new Intl.DateTimeFormat('es-AR', {
     month: 'long',
   }).format(new Date(year, month - 1));
 
+  const goToCurrentPeriod = useCallback(() => {
+    setMonth(currentMonth);
+    setYear(currentYear);
+  }, [currentMonth, currentYear]);
+
+  const goPrevMonth = useCallback(() => {
+    setMonth((m) => {
+      if (m === 1) {
+        setYear((y) => y - 1);
+        return 12;
+      }
+      return m - 1;
+    });
+  }, []);
+
+  const goNextMonth = useCallback(() => {
+    // si ya estás en el mes actual, no avanzás más
+    if (isCurrentPeriod) return;
+
+    setMonth((m) => {
+      if (m === 12) {
+        setYear((y) => y + 1);
+        return 1;
+      }
+      return m + 1;
+    });
+  }, [isCurrentPeriod]);
+
+  async function adjustOpeningBalance() {
+    const result = await Swal.fire({
+      title: 'Ajustar saldo inicial',
+      input: 'number',
+      inputLabel: `Saldo inicial para ${month}/${year}`,
+      inputValue: openingBalance,
+      inputAttributes: { step: '1' },
+      showCancelButton: true,
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Cancelar',
+    });
+
+    if (!result.isConfirmed) return;
+
+    const v = Number(result.value);
+    if (!Number.isFinite(v)) {
+      toast.error('Ingresá un número válido.');
+      return;
+    }
+
+    const res = await fetch('/api/monthly-opening-balance', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, month, amount: v }),
+    });
+
+    if (!res.ok) {
+      toast.error(await readApiError(res));
+      return;
+    }
+
+    setOpeningBalance(v);
+    toast.success('Saldo inicial actualizado');
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-5 flex items-end justify-between gap-3">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Resumen {monthName.charAt(0).toUpperCase() + monthName.slice(1)} del{' '}
@@ -167,6 +252,55 @@ export default function Page() {
             Vista general de ingresos, gastos y distribución.
           </p>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <button
+            type="button"
+            onClick={goPrevMonth}
+            disabled={loading}
+            className="px-3 py-2 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition disabled:opacity-60"
+          >
+            ←
+          </button>
+
+          <input
+            type="number"
+            value={month}
+            disabled={loading}
+            min={1}
+            max={12}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="w-20 rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-white/10 disabled:opacity-60"
+          />
+
+          <input
+            type="number"
+            value={year}
+            disabled={loading}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-28 rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-white/10 disabled:opacity-60"
+          />
+
+          <button
+            type="button"
+            onClick={goNextMonth}
+            disabled={loading || isCurrentPeriod}
+            className="px-3 py-2 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition disabled:opacity-50 disabled:hover:bg-transparent"
+          >
+            →
+          </button>
+
+          {!isCurrentPeriod ? (
+            <button
+              type="button"
+              onClick={goToCurrentPeriod}
+              disabled={loading}
+              className="px-3 py-2 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition disabled:opacity-60"
+            >
+              Hoy
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <section className="mb-6 card p-5">
@@ -175,51 +309,81 @@ export default function Page() {
             Resumen del mes
           </h2>
 
-          <div className="flex gap-2">
-            <Link
-              href="/transactions/expenses"
-              className="px-3 py-1.5 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition"
-            >
-              Ver gastos
-            </Link>
-            <Link
-              href="/transactions/income"
-              className="px-3 py-1.5 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition"
-            >
-              Ver ingresos
-            </Link>
-          </div>
+          {isCurrentPeriod ? (
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
+              <button
+                type="button"
+                onClick={adjustOpeningBalance}
+                disabled={loading}
+                className="col-span-2 sm:col-auto px-3 py-1.5 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition disabled:opacity-60"
+              >
+                <span className="sm:hidden">Ajustar saldo</span>
+                <span className="hidden sm:inline">Ajustar saldo inicial</span>
+              </button>
+
+              <Link
+                href="/transactions/expenses"
+                className="px-3 py-1.5 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition text-center"
+              >
+                Ver gastos
+              </Link>
+
+              <Link
+                href="/transactions/income"
+                className="px-3 py-1.5 text-sm rounded-md border border-[var(--border)] hover:bg-white/5 transition text-center"
+              >
+                Ver ingresos
+              </Link>
+            </div>
+          ) : (
+            <span className="text-xs text-muted">
+              Estás viendo un mes anterior.
+            </span>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-[var(--border)] p-4">
-            <div className="text-sm text-muted">Ingresos</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">
-              {formatMoneyARS(incomeTotal)}
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-32 text-sm text-muted">
+            Cargando información…
           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <div className="text-sm text-muted">Ingresos</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {formatMoneyARS(incomeTotal)}
+              </div>
+            </div>
 
-          <div className="rounded-lg border border-[var(--border)] p-4">
-            <div className="text-sm text-muted">Gastos</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">
-              {formatMoneyARS(expenseTotal)}
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <div className="text-sm text-muted">Saldo inicial</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {formatMoneyARS(openingBalance)}
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-lg border border-[var(--border)] p-4">
-            <div className="text-sm text-muted">Balance</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">
-              {formatMoneyARS(balance)}
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <div className="text-sm text-muted">Gastos</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {formatMoneyARS(expenseTotal)}
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-lg border border-[var(--border)] p-4">
-            <div className="text-sm text-muted">% gastado</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">
-              {spentPct == null ? '—' : `${spentPct.toFixed(0)}%`}
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <div className="text-sm text-muted">Balance</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {formatMoneyARS(balance)}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[var(--border)] p-4">
+              <div className="text-sm text-muted">% gastado</div>
+              <div className="mt-1 text-xl font-semibold tabular-nums">
+                {spentPct == null ? '—' : `${spentPct.toFixed(0)}%`}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="mb-6 card p-5">

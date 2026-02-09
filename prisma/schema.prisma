@@ -46,3 +46,16 @@ model Transaction {
   @@index([kind])
   @@index([kind, date])
 }
+
+model MonthlyOpeningBalance {
+  id        String   @id @default(cuid())
+  year      Int
+  month     Int
+  amount    Decimal
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, month])
+  @@index([year, month])
+}
